@@ -120,7 +120,7 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local mouse = LocalPlayer:GetMouse()
 
-local circleRadius = 50  -- The radius of the 2D circle
+local circleRadius =50  -- The radius of the 2D circle
 local circleColor = Color3.fromRGB(255, 0, 0)  -- Color of the circle (red)
 local circleTransparency = 0.5  -- Transparency of the circle
 
@@ -131,20 +131,15 @@ local isLocking = false  -- Whether the camera and mouse are locked
 local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- Create a frame to represent the 2D circle around the mouse
+-- Create a frame to represent the 2D circle in the middle of the screen
 local circleFrame = Instance.new("Frame")
 circleFrame.Size = UDim2.new(0, circleRadius * 2, 0, circleRadius * 2)
-circleFrame.AnchorPoint = Vector2.new(0.5, 0.5)  -- Center the circle on the mouse position
+circleFrame.AnchorPoint = Vector2.new(0.5, 0.5)  -- Center the circle on the screen
 circleFrame.BackgroundColor3 = circleColor
 circleFrame.BackgroundTransparency = circleTransparency
 circleFrame.BorderSizePixel = 0
+circleFrame.Position = UDim2.new(0.5, 0, 0.5, 0)  -- Centered at middle of the screen
 circleFrame.Parent = screenGui
-
--- Update the position of the circle to follow the mouse
-local function updateCirclePosition()
-    local mousePos = mouse.Hit.p
-    circleFrame.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
-end
 
 -- Lock the camera to the selected player's head (rotates the camera)
 local function lockCameraToPlayer(player)
@@ -206,8 +201,6 @@ end)
 
 -- Update the circle's position on each frame
 game:GetService("RunService").Heartbeat:Connect(function()
-    updateCirclePosition()
-
     -- Keep locking camera if the mouse is held
     if isLocking and targetPlayer then
         lockCameraToPlayer(targetPlayer)
