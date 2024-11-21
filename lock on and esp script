@@ -118,7 +118,7 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local mouse = LocalPlayer:GetMouse()
 
-local circleRadius = 20  -- The radius of the 2D circle
+local circleRadius = 50 -- The radius of the 2D circle
 local circleColor = Color3.fromRGB(255, 0, 0)  -- Color of the circle (red)
 local circleTransparency = 0.5  -- Transparency of the circle
 
