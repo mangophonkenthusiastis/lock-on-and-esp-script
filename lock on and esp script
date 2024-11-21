@@ -1,0 +1,119 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local mouse = LocalPlayer:GetMouse()
+
+local lockKey = Enum.KeyCode.T  -- The key to press to toggle lock
+local targetPlayer = nil  -- The player to target
+local ESPEnabled = true  -- Enable or disable ESP features
+
+-- Function to create ESP box and health bar around players
+local function createESP(player)
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local humanoidRootPart = player.Character.HumanoidRootPart
+        
+        -- Create red box around the player
+        local box = Instance.new("Frame")
+        box.Size = UDim2.new(0, 100, 0, 100)  -- Size of the box
+        box.Position = UDim2.new(0, humanoidRootPart.Position.X, 0, humanoidRootPart.Position.Y)
+        box.BorderColor3 = Color3.fromRGB(255, 0, 0)  -- Red color for the box
+        box.BorderSizePixel = 2
+        box.BackgroundTransparency = 1
+        box.Parent = game.CoreGui
+
+        -- Create health bar
+        local healthBar = Instance.new("Frame")
+        healthBar.Size = UDim2.new(0, 10, 0, 50)  -- Health bar size
+        healthBar.Position = UDim2.new(0, humanoidRootPart.Position.X + 60, 0, humanoidRootPart.Position.Y)
+        healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)  -- Green health bar
+        healthBar.Parent = game.CoreGui
+        
+        -- Update health bar based on health
+        local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.HealthChanged:Connect(function()
+                local healthPercentage = humanoid.Health / humanoid.MaxHealth
+                healthBar.Size = UDim2.new(0, 10, 0, 50 * healthPercentage)
+            end)
+        end
+    end
+end
+
+-- Function to lock mouse and camera to player's torso or head
+local function lockMouseToPlayer(target)
+    if target and target.Character then
+        local head = target.Character:FindFirstChild("Head")
+        local torso = target.Character:FindFirstChild("HumanoidRootPart")
+
+        if head then
+            local playerPos = head.Position
+            mouse.Move:Connect(function()
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, playerPos)
+            end)
+        elseif torso then
+            local playerPos = torso.Position
+            mouse.Move:Connect(function()
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, playerPos)
+            end)
+        end
+    end
+end
+
+-- Function to reset mouse and camera when unlocked
+local function unlockMouse()
+    mouse.Icon = "rbxassetid://160658058"  -- Default icon
+    Camera.CameraType = Enum.CameraType.Custom
+    Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + Camera.CFrame.LookVector)
+end
+
+-- Listen for the T key press to toggle lock and unlock
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    if input.KeyCode == lockKey then
+        -- If no target is selected, pick the closest player
+        if not targetPlayer then
+            local closestPlayer = nil
+            local shortestDistance = math.huge
+
+            -- Find the closest player
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    local character = player.Character
+                    local distance = (LocalPlayer.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
+
+                    if distance < shortestDistance then
+                        closestPlayer = player
+                        shortestDistance = distance
+                    end
+                end
+            end
+
+            -- Lock the mouse to the closest player
+            targetPlayer = closestPlayer
+            lockMouseToPlayer(targetPlayer)
+        else
+            -- If a target is selected, unlock the mouse
+            unlockMouse()
+            targetPlayer = nil
+        end
+    end
+end)
+
+-- Create ESP for players when they join
+Players.PlayerAdded:Connect(function(player)
+    if player ~= LocalPlayer then
+        player.CharacterAdded:Connect(function(character)
+            if ESPEnabled then
+                createESP(player)
+            end
+        end)
+    end
+end)
+
+-- Reset when the player respawns
+LocalPlayer.CharacterAdded:Connect(function()
+    unlockMouse()
+    targetPlayer = nil
+end)
