@@ -118,7 +118,7 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local mouse = LocalPlayer:GetMouse()
 
-local circleRadius = 20  -- The radius of the 2D circle (smaller now)
+local circleRadius = 20  -- The radius of the 2D circle
 local circleColor = Color3.fromRGB(255, 0, 0)  -- Color of the circle (red)
 local circleTransparency = 0.5  -- Transparency of the circle
 
@@ -144,15 +144,18 @@ local function updateCirclePosition()
     circleFrame.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
 end
 
--- Lock the camera to the selected player's head, shifted right of the character
-local function followPlayerWithCamera(player)
+-- Lock the camera to the selected player's head
+local function lockCameraToPlayer(player)
     if player and player.Character then
         local head = player.Character:FindFirstChild("Head")
         if head then
-            -- Camera will stay behind, above, and more to the right of the character's head
-            local cameraOffset = Vector3.new(5, 5, -10)  -- Shift the camera to the right (positive X value)
-            Camera.CameraType = Enum.CameraType.Scriptable
-            Camera.CFrame = CFrame.new(LocalPlayer.Character.HumanoidRootPart.Position + cameraOffset, player.Character.Head.Position)
+            -- Calculate the vector from the camera to the player's head
+            local cameraPosition = Camera.CFrame.Position
+            local playerPosition = head.Position
+            local direction = (playerPosition - cameraPosition).unit  -- Get the direction from the camera to the player
+
+            -- Adjust the camera position slightly behind and above the character (third-person-like view)
+            Camera.CFrame = CFrame.new(cameraPosition + direction * 5 + Vector3.new(0, 2, 0), playerPosition)
         end
     end
 end
@@ -193,7 +196,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
         if targetPlayer then
             isLocking = true
-            followPlayerWithCamera(targetPlayer)
         end
     end
 end)
@@ -212,6 +214,6 @@ game:GetService("RunService").Heartbeat:Connect(function()
 
     -- Keep locking camera if the mouse is held
     if isLocking and targetPlayer then
-        followPlayerWithCamera(targetPlayer)
+        lockCameraToPlayer(targetPlayer)
     end
 end)
