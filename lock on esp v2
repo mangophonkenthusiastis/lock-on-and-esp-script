@@ -87,9 +87,6 @@ local function addVisuals(player)
         end
     end
 
-
-
-
     player.CharacterAdded:Connect(addToCharacter)
     if player.Character then
         addToCharacter(player.Character)
