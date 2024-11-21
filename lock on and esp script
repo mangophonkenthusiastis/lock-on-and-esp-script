@@ -1,119 +1,217 @@
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- Screen dimensions for boundary calculations
+local screenSize = camera.ViewportSize
+local tracerStart = Vector2.new(screenSize.X / 2, screenSize.Y) -- Bottom-center of screen
+
+-- Function to draw tracers
+local function drawTracer(player)
+    local line = Drawing.new("Line")
+    line.Color = Color3.new(1, 0, 0) -- Red line
+    line.Thickness = 2
+    line.Transparency = 1
+
+    local function updateTracer()
+        if player.Character and player.Character.PrimaryPart then
+            local worldPosition = player.Character.PrimaryPart.Position
+            local screenPosition, onScreen = camera:WorldToViewportPoint(worldPosition)
+
+            -- If player is off-screen, draw tracer towards the bottom-center of the screen
+            if not onScreen then
+                -- Adjust tracer position based on direction
+                local screenCenterX = screenSize.X / 2
+                local screenCenterY = screenSize.Y
+                line.From = Vector2.new(screenCenterX, screenCenterY) -- Always from the bottom-center
+
+                -- Always draw towards the bottom-center when off-screen
+                line.To = Vector2.new(screenCenterX, screenCenterY)
+            else
+                -- If the player is on-screen, draw the tracer to the player's position
+                local clampedPosition = Vector2.new(
+                    math.clamp(screenPosition.X, 0, screenSize.X),
+                    math.clamp(screenPosition.Y, 0, screenSize.Y)
+                )
+                line.From = Vector2.new(screenSize.X / 2, screenSize.Y)
+                line.To = clampedPosition
+            end
+
+            line.Visible = true
+        else
+            line.Visible = false
+        end
+    end
+
+    -- Update tracer every frame
+    RunService.RenderStepped:Connect(updateTracer)
+
+    -- Remove the tracer if the player leaves
+    player.AncestryChanged:Connect(function()
+        if not player:IsDescendantOf(Players) then
+            line:Remove()
+        end
+    end)
+end
+
+-- Function to add highlights and nametags to a player's character
+local function addVisuals(player)
+    local function addToCharacter(character)
+        -- Add Highlight
+        local highlight = Instance.new("Highlight")
+        highlight.FillColor = Color3.new(1, 0, 0) -- Red fill
+        highlight.OutlineColor = Color3.new(1, 1, 1) -- White outline
+        highlight.Adornee = character
+        highlight.Parent = character
+
+        -- Add Nametag
+        local head = character:WaitForChild("Head", 5)
+        if head then
+            local billboard = Instance.new("BillboardGui")
+            billboard.Size = UDim2.new(4, 0, 1, 0)
+            billboard.StudsOffset = Vector3.new(0, 3, 0)
+            billboard.Adornee = head
+            billboard.Parent = head
+            billboard.AlwaysOnTop = true
+
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.Text = player.Name
+            textLabel.TextColor3 = Color3.new(1, 1, 1)
+            textLabel.TextStrokeTransparency = 0
+            textLabel.Font = Enum.Font.SourceSansBold
+            textLabel.TextScaled = true
+            textLabel.Parent = billboard
+        end
+    end
+
+
+
+
+    player.CharacterAdded:Connect(addToCharacter)
+    if player.Character then
+        addToCharacter(player.Character)
+    end
+end
+
+-- Add visuals and tracers for all players
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        addVisuals(player)
+        drawTracer(player)
+    end
+end
+
+-- Add visuals and tracers for new players
+Players.PlayerAdded:Connect(function(player)
+    if player ~= LocalPlayer then
+        addVisuals(player)
+        drawTracer(player)
+    end
+end)
+
+local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local mouse = LocalPlayer:GetMouse()
 
-local lockKey = Enum.KeyCode.T  -- The key to press to toggle lock
-local targetPlayer = nil  -- The player to target
-local ESPEnabled = true  -- Enable or disable ESP features
+local circleRadius = 20  -- The radius of the 2D circle (smaller now)
+local circleColor = Color3.fromRGB(255, 0, 0)  -- Color of the circle (red)
+local circleTransparency = 0.5  -- Transparency of the circle
 
--- Function to create ESP box and health bar around players
-local function createESP(player)
-    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        local humanoidRootPart = player.Character.HumanoidRootPart
-        
-        -- Create red box around the player
-        local box = Instance.new("Frame")
-        box.Size = UDim2.new(0, 100, 0, 100)  -- Size of the box
-        box.Position = UDim2.new(0, humanoidRootPart.Position.X, 0, humanoidRootPart.Position.Y)
-        box.BorderColor3 = Color3.fromRGB(255, 0, 0)  -- Red color for the box
-        box.BorderSizePixel = 2
-        box.BackgroundTransparency = 1
-        box.Parent = game.CoreGui
+local targetPlayer = nil  -- Store the player that is currently selected
+local isLocking = false  -- Whether the camera and mouse are locked
 
-        -- Create health bar
-        local healthBar = Instance.new("Frame")
-        healthBar.Size = UDim2.new(0, 10, 0, 50)  -- Health bar size
-        healthBar.Position = UDim2.new(0, humanoidRootPart.Position.X + 60, 0, humanoidRootPart.Position.Y)
-        healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)  -- Green health bar
-        healthBar.Parent = game.CoreGui
-        
-        -- Update health bar based on health
-        local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.HealthChanged:Connect(function()
-                local healthPercentage = humanoid.Health / humanoid.MaxHealth
-                healthBar.Size = UDim2.new(0, 10, 0, 50 * healthPercentage)
-            end)
-        end
-    end
+-- Create a ScreenGui to hold the circle
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Create a frame to represent the 2D circle around the mouse
+local circleFrame = Instance.new("Frame")
+circleFrame.Size = UDim2.new(0, circleRadius * 2, 0, circleRadius * 2)
+circleFrame.AnchorPoint = Vector2.new(0.5, 0.5)  -- Center the circle on the mouse position
+circleFrame.BackgroundColor3 = circleColor
+circleFrame.BackgroundTransparency = circleTransparency
+circleFrame.BorderSizePixel = 0
+circleFrame.Parent = screenGui
+
+-- Update the position of the circle to follow the mouse
+local function updateCirclePosition()
+    local mousePos = mouse.Hit.p
+    circleFrame.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
 end
 
--- Function to lock mouse and camera to player's torso or head
-local function lockMouseToPlayer(target)
-    if target and target.Character then
-        local head = target.Character:FindFirstChild("Head")
-        local torso = target.Character:FindFirstChild("HumanoidRootPart")
-
+-- Lock the camera to the selected player's head, shifted right of the character
+local function followPlayerWithCamera(player)
+    if player and player.Character then
+        local head = player.Character:FindFirstChild("Head")
         if head then
-            local playerPos = head.Position
-            mouse.Move:Connect(function()
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, playerPos)
-            end)
-        elseif torso then
-            local playerPos = torso.Position
-            mouse.Move:Connect(function()
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, playerPos)
-            end)
+            -- Camera will stay behind, above, and more to the right of the character's head
+            local cameraOffset = Vector3.new(5, 5, -10)  -- Shift the camera to the right (positive X value)
+            Camera.CameraType = Enum.CameraType.Scriptable
+            Camera.CFrame = CFrame.new(LocalPlayer.Character.HumanoidRootPart.Position + cameraOffset, player.Character.Head.Position)
         end
     end
 end
 
--- Function to reset mouse and camera when unlocked
-local function unlockMouse()
-    mouse.Icon = "rbxassetid://160658058"  -- Default icon
+-- Unlock the camera and reset it back to default
+local function unlockCamera()
     Camera.CameraType = Enum.CameraType.Custom
-    Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + Camera.CFrame.LookVector)
 end
 
--- Listen for the T key press to toggle lock and unlock
+-- Check if the mouse is over a player within the circle
+local function checkMouseOverPlayer()
+    local closestPlayer = nil
+    local shortestDistance = circleRadius  -- Limit the distance to the circle's radius
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character and player ~= LocalPlayer then
+            local character = player.Character
+            local head = character:FindFirstChild("Head")
+            if head then
+                local distance = (head.Position - mouse.Hit.p).Magnitude
+                if distance <= circleRadius and distance < shortestDistance then
+                    closestPlayer = player
+                    shortestDistance = distance
+                end
+            end
+        end
+    end
+    return closestPlayer
+end
+
+-- Listen for mouse click and lock camera on the player
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
 
-    if input.KeyCode == lockKey then
-        -- If no target is selected, pick the closest player
-        if not targetPlayer then
-            local closestPlayer = nil
-            local shortestDistance = math.huge
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then  -- Left mouse click
+        -- Check if we clicked on a player inside the circle
+        targetPlayer = checkMouseOverPlayer()
 
-            -- Find the closest player
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character then
-                    local character = player.Character
-                    local distance = (LocalPlayer.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
-
-                    if distance < shortestDistance then
-                        closestPlayer = player
-                        shortestDistance = distance
-                    end
-                end
-            end
-
-            -- Lock the mouse to the closest player
-            targetPlayer = closestPlayer
-            lockMouseToPlayer(targetPlayer)
-        else
-            -- If a target is selected, unlock the mouse
-            unlockMouse()
-            targetPlayer = nil
+        if targetPlayer then
+            isLocking = true
+            followPlayerWithCamera(targetPlayer)
         end
     end
 end)
 
--- Create ESP for players when they join
-Players.PlayerAdded:Connect(function(player)
-    if player ~= LocalPlayer then
-        player.CharacterAdded:Connect(function(character)
-            if ESPEnabled then
-                createESP(player)
-            end
-        end)
+-- Stop locking when mouse click is released
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isLocking = false
+        unlockCamera()
     end
 end)
 
--- Reset when the player respawns
-LocalPlayer.CharacterAdded:Connect(function()
-    unlockMouse()
-    targetPlayer = nil
+-- Update the circle's position on each frame
+game:GetService("RunService").Heartbeat:Connect(function()
+    updateCirclePosition()
+
+    -- Keep locking camera if the mouse is held
+    if isLocking and targetPlayer then
+        followPlayerWithCamera(targetPlayer)
+    end
 end)
