@@ -1,4 +1,113 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
+-- Screen dimensions for boundary calculations
+local screenSize = camera.ViewportSize
+local tracerStart = Vector2.new(screenSize.X / 2, screenSize.Y) -- Bottom-center of screen
+
+-- Function to draw tracers
+local function drawTracer(player)
+    local line = Drawing.new("Line")
+    line.Color = Color3.new(1, 0, 0) -- Red line
+    line.Thickness = 2
+    line.Transparency = 1
+
+    local function updateTracer()
+        if player.Character and player.Character.PrimaryPart then
+            local worldPosition = player.Character.PrimaryPart.Position
+            local screenPosition, onScreen = camera:WorldToViewportPoint(worldPosition)
+
+            -- If player is off-screen, draw tracer towards the bottom-center of the screen
+            if not onScreen then
+                -- Adjust tracer position based on direction
+                local screenCenterX = screenSize.X / 2
+                local screenCenterY = screenSize.Y
+                line.From = Vector2.new(screenCenterX, screenCenterY) -- Always from the bottom-center
+
+                -- Always draw towards the bottom-center when off-screen
+                line.To = Vector2.new(screenCenterX, screenCenterY)
+            else
+                -- If the player is on-screen, draw the tracer to the player's position
+                local clampedPosition = Vector2.new(
+                    math.clamp(screenPosition.X, 0, screenSize.X),
+                    math.clamp(screenPosition.Y, 0, screenSize.Y)
+                )
+                line.From = Vector2.new(screenSize.X / 2, screenSize.Y)
+                line.To = clampedPosition
+            end
+
+            line.Visible = true
+        else
+            line.Visible = false
+        end
+    end
+
+    -- Update tracer every frame
+    RunService.RenderStepped:Connect(updateTracer)
+
+    -- Remove the tracer if the player leaves
+    player.AncestryChanged:Connect(function()
+        if not player:IsDescendantOf(Players) then
+            line:Remove()
+        end
+    end)
+end
+
+-- Function to add highlights and nametags to a player's character
+local function addVisuals(player)
+    local function addToCharacter(character)
+        -- Add Highlight
+        local highlight = Instance.new("Highlight")
+        highlight.FillColor = Color3.new(1, 0, 0) -- Red fill
+        highlight.OutlineColor = Color3.new(1, 1, 1) -- White outline
+        highlight.Adornee = character
+        highlight.Parent = character
+
+        -- Add Nametag
+        local head = character:WaitForChild("Head", 5)
+        if head then
+            local billboard = Instance.new("BillboardGui")
+            billboard.Size = UDim2.new(4, 0, 1, 0)
+            billboard.StudsOffset = Vector3.new(0, 3, 0)
+            billboard.Adornee = head
+            billboard.Parent = head
+            billboard.AlwaysOnTop = true
+
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.Text = player.Name
+            textLabel.TextColor3 = Color3.new(1, 1, 1)
+            textLabel.TextStrokeTransparency = 0
+            textLabel.Font = Enum.Font.SourceSansBold
+            textLabel.TextScaled = true
+            textLabel.Parent = billboard
+        end
+    end
+
+    player.CharacterAdded:Connect(addToCharacter)
+    if player.Character then
+        addToCharacter(player.Character)
+    end
+end
+
+-- Add visuals and tracers for all players
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        addVisuals(player)
+        drawTracer(player)
+    end
+end
+
+-- Add visuals and tracers for new players
+Players.PlayerAdded:Connect(function(player)
+    if player ~= LocalPlayer then
+        addVisuals(player)
+        drawTracer(player)
+    end
+end)
 
 
 
